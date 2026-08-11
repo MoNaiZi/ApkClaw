@@ -13,10 +13,14 @@ import com.apk.claw.android.agent.llm.StreamingListener
 import com.apk.claw.android.service.ClawAccessibilityService
 import com.apk.claw.android.tool.ToolRegistry
 import com.apk.claw.android.tool.impl.GetScreenInfoTool
+import com.apk.claw.android.tool.impl.SeeScreenTool
 import com.apk.claw.android.tool.ToolResult
 import com.apk.claw.android.utils.XLog
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import dev.langchain4j.data.image.Image
+import dev.langchain4j.data.message.ImageContent
+import dev.langchain4j.data.message.TextContent
 import dev.langchain4j.data.message.AiMessage
 import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
@@ -208,17 +212,29 @@ class DefaultAgentService : AgentService {
      * - 保护区（最近 KEEP_RECENT_ROUNDS 轮）：完整保留
      * - 保护区外：AI thinking 不动，tool result 压缩为一行摘要
      */
+    /**
+     * 估算一条消息的字符数（用于压缩统计）。
+     * 注意：UserMessage 可能是多模态（文本+图片），不能调用 singleText()（会抛异常），需逐个 content 统计。
+     */
+    private fun estimateMessageChars(msg: ChatMessage): Int {
+        return when (msg) {
+            is AiMessage -> (msg.text()?.length ?: 0) + (msg.toolExecutionRequests()?.sumOf { it.arguments()?.length ?: 0 } ?: 0)
+            is ToolExecutionResultMessage -> msg.text().length
+            is UserMessage -> msg.contents().sumOf { content ->
+                when (content) {
+                    is TextContent -> content.text().length
+                    is ImageContent -> content.image()?.base64Data()?.length ?: 0
+                    else -> 0
+                }
+            }
+            is SystemMessage -> msg.text().length
+            else -> 0
+        }
+    }
+
     private fun compressHistoryForSend(messages: MutableList<ChatMessage>) {
         // 压缩前统计总字符数
-        val charsBefore = messages.sumOf { msg ->
-            when (msg) {
-                is AiMessage -> (msg.text()?.length ?: 0) + (msg.toolExecutionRequests()?.sumOf { it.arguments()?.length ?: 0 } ?: 0)
-                is ToolExecutionResultMessage -> msg.text().length
-                is UserMessage -> msg.singleText().length
-                is SystemMessage -> msg.text().length
-                else -> 0
-            }
-        }
+        val charsBefore = messages.sumOf { estimateMessageChars(it) }
         val msgCountBefore = messages.size
 
         // 0. get_screen_info 特殊处理：无视分级，全局只保留最新一条完整结果
@@ -234,6 +250,15 @@ class DefaultAgentService : AgentService {
                 && msg.text() != screenPlaceholder
             ) {
                 messages[i] = ToolExecutionResultMessage.from(msg.id(), msg.toolName(), screenPlaceholder)
+            }
+        }
+
+        // 0.5 视觉截图消息：图片 token 消耗大，全局只保留最近一条，其余替换为文本占位符
+        val lastImageMsgIdx = messages.indexOfLast { it.isImageUserMessage() }
+        for (i in messages.indices) {
+            val msg = messages[i]
+            if (msg.isImageUserMessage() && i != lastImageMsgIdx) {
+                messages[i] = UserMessage.from("[历史截图已省略]")
             }
         }
 
@@ -258,15 +283,7 @@ class DefaultAgentService : AgentService {
         }
 
         // 压缩后统计
-        val charsAfter = messages.sumOf { msg ->
-            when (msg) {
-                is AiMessage -> (msg.text()?.length ?: 0) + (msg.toolExecutionRequests()?.sumOf { it.arguments()?.length ?: 0 } ?: 0)
-                is ToolExecutionResultMessage -> msg.text().length
-                is UserMessage -> msg.singleText().length
-                is SystemMessage -> msg.text().length
-                else -> 0
-            }
-        }
+        val charsAfter = messages.sumOf { estimateMessageChars(it) }
         val saved = charsBefore - charsAfter
         if (saved > 0) {
             XLog.i(TAG, "上下文压缩: ${charsBefore}→${charsAfter}字符, 节省${saved}字符(${saved * 100 / charsBefore}%), 轮数=${aiIndices.size}")
@@ -307,6 +324,10 @@ class DefaultAgentService : AgentService {
             if (resultJson.length > 80) resultJson.take(80) + "..." else resultJson
         }
     }
+
+    /** 判断消息是否为包含图片的多模态用户消息（视觉模式截图） */
+    private fun ChatMessage.isImageUserMessage(): Boolean =
+        this is UserMessage && contents().any { it is ImageContent }
 
     // ==================== 主执行循环 ====================
 
@@ -424,7 +445,39 @@ class DefaultAgentService : AgentService {
 
                 // 添加工具结果到消息
                 val resultJson = GSON.toJson(result)
-                messages.add(ToolExecutionResultMessage.from(toolRequest, resultJson))
+                if (toolName == "see_screen" && result.isSuccess
+                    && result.data != null && result.data!!.startsWith("data:image/")
+                ) {
+                    // 视觉模式：将截图作为多模态图片注入 UserMessage，让 LLM 真正"看到"屏幕
+                    val dataUri = result.data!!
+                    val commaIdx = dataUri.indexOf(',')
+                    if (commaIdx > 0) {
+                        val base64 = dataUri.substring(commaIdx + 1)
+                        val mime = dataUri.substring(5, commaIdx).substringBefore(';')
+                        val image = Image.builder()
+                            .base64Data(base64)
+                            .mimeType(mime)
+                            .build()
+                        messages.add(ToolExecutionResultMessage.from(toolRequest, "[截图已获取，图像内容见下一条消息]"))
+                        val imgW = SeeScreenTool.getLastImageWidth()
+                        val imgH = SeeScreenTool.getLastImageHeight()
+                        val sizeHint = if (imgW > 0 && imgH > 0) "图片尺寸为 ${imgW}x${imgH} 像素。" else ""
+                        messages.add(
+                            UserMessage.from(
+                                TextContent.from(
+                                    "这是当前屏幕的截图（${sizeHint}你看到的坐标就是图片像素坐标，" +
+                                    "tap/swipe/long_press 会自动换算为屏幕物理坐标，无需自行换算）。" +
+                                    "请仔细观察画面内容，判断当前界面状态并决定下一步操作。"
+                                ),
+                                ImageContent.from(image)
+                            )
+                        )
+                    } else {
+                        messages.add(ToolExecutionResultMessage.from(toolRequest, resultJson))
+                    }
+                } else {
+                    messages.add(ToolExecutionResultMessage.from(toolRequest, resultJson))
+                }
                 XLog.d(TAG, "displayName:$displayName toolName:$toolName")
             }
 

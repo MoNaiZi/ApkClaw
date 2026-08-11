@@ -33,6 +33,7 @@ object ToolRegistry {
         register(OpenAppTool())
         register(GetInstalledAppsTool())
         register(TakeScreenshotTool())
+        register(SeeScreenTool())
         register(WaitTool())
         register(RepeatActionsTool())
         register(ClipboardTool())

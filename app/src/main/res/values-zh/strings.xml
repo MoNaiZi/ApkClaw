@@ -118,6 +118,7 @@
     <string name="llm_config_model_name_hint">如 gpt-4o、gpt-4o-mini、claude-3-5-sonnet</string>
     <string name="llm_config_saved">LLM 配置已保存</string>
     <string name="llm_config_api_key_required">请填写 API Key</string>
+    <string name="llm_config_model_vision_tip">提示：视觉模式（see_screen）需要模型支持图像输入。请使用 gpt-4o、claude-sonnet 等支持视觉的多模态模型；若使用纯文本模型，Agent 将只能通过节点树感知屏幕，无法进行视觉分析。</string>
     <string name="menu_llm_config">LLM 配置</string>
 
     <!-- 设置菜单项 -->
@@ -218,6 +219,7 @@
     <string name="tool_name_search_app">搜索APP</string>
     <string name="tool_name_clipboard">剪贴板</string>
     <string name="tool_name_scroll_to_find">滚动查找</string>
+    <string name="tool_name_see_screen">查看屏幕</string>
 
     <!-- 输入弹窗 -->
     <string name="input_dialog_need_more">至少输入%d个字符</string>

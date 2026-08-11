@@ -129,7 +129,12 @@ class TaskOrchestrator(
             }
         }
 
-        ClawAccessibilityService.getInstance()?.pressHome()
+        // 注意：不要在任务开始前强制按 Home 回桌面。
+        // 否则连续操作场景（如游戏已在前台，再发"点击商店"）会把应用切到后台，
+        // Agent 只能看到桌面，导致任务失败。Agent 应从当前界面开始观察并行动。
+
+        // 新任务从干净的坐标状态开始，避免上一个任务的视觉缩放比例残留
+        ClawAccessibilityService.resetVisualScale()
 
         FloatingCircleManager.showTaskNotify(task, channel)
 

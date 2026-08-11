@@ -49,6 +49,9 @@ public class TapTool extends BaseTool {
         }
         int x = requireInt(params, "x");
         int y = requireInt(params, "y");
+        // 视觉模式下 LLM 看到的是缩放后的截图，坐标是图片像素坐标，需换算为物理屏幕坐标
+        x = ClawAccessibilityService.toPhysicalX(x);
+        y = ClawAccessibilityService.toPhysicalY(y);
         String boundsError = validateCoordinates(x, y);
         if (boundsError != null) return ToolResult.error(boundsError);
         boolean success = service.performTap(x, y);

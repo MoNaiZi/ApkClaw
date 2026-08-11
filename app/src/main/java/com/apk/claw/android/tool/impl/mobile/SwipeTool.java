@@ -54,6 +54,11 @@ public class SwipeTool extends BaseTool {
         int startY = requireInt(params, "start_y");
         int endX = requireInt(params, "end_x");
         int endY = requireInt(params, "end_y");
+        // 视觉模式下 LLM 看到的是缩放后的截图，坐标是图片像素坐标，需换算为物理屏幕坐标
+        startX = ClawAccessibilityService.toPhysicalX(startX);
+        startY = ClawAccessibilityService.toPhysicalY(startY);
+        endX = ClawAccessibilityService.toPhysicalX(endX);
+        endY = ClawAccessibilityService.toPhysicalY(endY);
         String boundsError = validateCoordinates(startX, startY);
         if (boundsError != null) return ToolResult.error(boundsError);
         boundsError = validateCoordinates(endX, endY);

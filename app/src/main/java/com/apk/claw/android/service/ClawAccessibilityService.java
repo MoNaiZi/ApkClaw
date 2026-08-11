@@ -37,6 +37,43 @@ public class ClawAccessibilityService extends AccessibilityService {
         return instance != null;
     }
 
+    // ======================== 视觉坐标换算 ========================
+
+    /**
+     * 最近一次视觉截图（see_screen）的实际缩放比例：发送给 LLM 的图片宽度 / 屏幕物理宽度。
+     * 视觉模式下 LLM 返回的坐标是图片像素坐标，点击/滑动前需除以该比例还原为物理屏幕坐标。
+     * 1.0f 表示未缩放（节点树模式返回的 bounds 就是物理坐标，无需换算）。
+     */
+    private static volatile float sVisualScale = 1.0f;
+
+    public static void setVisualScale(float scale) {
+        sVisualScale = (scale > 0f && scale <= 1f) ? scale : 1.0f;
+    }
+
+    public static float getVisualScale() {
+        return sVisualScale;
+    }
+
+    /**
+     * 节点类观察工具（get_screen_info / find_node_info / scroll_to_find）返回节点信息后调用，
+     * 因为节点 bounds 是物理坐标，后续坐标操作不应再换算。
+     */
+    public static void resetVisualScale() {
+        sVisualScale = 1.0f;
+    }
+
+    /** 将视觉模式下的图片坐标换算为物理屏幕坐标（未缩放时原样返回）。 */
+    public static int toPhysicalX(int x) {
+        float scale = sVisualScale;
+        return scale == 1.0f ? x : Math.round(x / scale);
+    }
+
+    /** 将视觉模式下的图片坐标换算为物理屏幕坐标（未缩放时原样返回）。 */
+    public static int toPhysicalY(int y) {
+        float scale = sVisualScale;
+        return scale == 1.0f ? y : Math.round(y / scale);
+    }
+
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();

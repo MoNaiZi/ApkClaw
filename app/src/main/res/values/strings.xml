@@ -118,6 +118,7 @@
     <string name="llm_config_model_name_hint">e.g. gpt-4o, gpt-4o-mini, claude-3-5-sonnet</string>
     <string name="llm_config_saved">LLM configuration saved</string>
     <string name="llm_config_api_key_required">Please enter API Key</string>
+    <string name="llm_config_model_vision_tip">Note: Visual mode (see_screen) requires a model with image input support. Use multimodal models such as gpt-4o or claude-sonnet. With text-only models, the Agent can only perceive the screen via the UI hierarchy tree.</string>
     <string name="menu_llm_config">LLM Config</string>
 
     <!-- Settings Menu -->
@@ -218,6 +219,7 @@
     <string name="tool_name_search_app">Search App</string>
     <string name="tool_name_clipboard">Clipboard</string>
     <string name="tool_name_scroll_to_find">Scroll to Find</string>
+    <string name="tool_name_see_screen">See Screen</string>
 
     <!-- Input Dialog -->
     <string name="input_dialog_need_more">Enter at least %d characters</string>

@@ -62,6 +62,8 @@ public class FindNodeInfoTool extends BaseTool {
             for (int i = 0; i < nodes.size(); i++) {
                 sb.append("[").append(i).append("] ").append(service.getNodeDetail(nodes.get(i))).append("\n");
             }
+            // 节点 bounds 是物理坐标，后续坐标操作不应再按视觉缩放换算
+            service.resetVisualScale();
             return ToolResult.success(sb.toString());
         } finally {
             ClawAccessibilityService.recycleNodes(nodes);

@@ -153,6 +153,8 @@ public class ScrollToFindTool extends BaseTool {
                     if (node.getClassName() != null) {
                         sb.append("\n  class=").append(node.getClassName());
                     }
+                    // 节点 bounds 是物理坐标，后续坐标操作不应再按视觉缩放换算
+                    service.resetVisualScale();
                     return ToolResult.success(sb.toString());
                 }
             }
